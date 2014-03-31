@@ -13,7 +13,6 @@ $array = array(
     //缓存有效期
     'CACHE_TIME' => 60,
     'PAGE_SIZE' => 15,
-    'OUTPUT_ENCODE' => 'true',
 );
 //合并输出配置
 return array_merge($config, $array);
