@@ -9,23 +9,24 @@
 // | Author: liu21st <liu21st@gmail.com>
 // +----------------------------------------------------------------------
 
+defined('THINK_PATH') or exit();
 /**
- * ThinkPHP RESTFul 控制器基类 抽象类
- * @category   Think
- * @package  Think
- * @subpackage  Core
- * @author   liu21st <liu21st@gmail.com>
+ * ThinkPHP Restful 控制器扩展 
+ * @category   Extend
+ * @package  Extend
+ * @subpackage  Action
+ * @author    liu21st <liu21st@gmail.com>
  */
-abstract class Action {
+abstract class RestAction {
 
     // 当前Action名称
-    private $name =  '';
+    private     $name       =   '';
     // 视图实例
-    protected $view   =  null;
-    protected $_method =  ''; // 当前请求类型
-    protected $_type = ''; // 当前资源类型
+    protected   $view       =   null;
+    protected   $_method    =   ''; // 当前请求类型
+    protected   $_type      =   ''; // 当前资源类型
     // 输出类型
-    protected $_types = array();
+    protected   $_types     =   array();
 
    /**
      * 架构函数 取得模板对象实例
@@ -35,12 +36,21 @@ abstract class Action {
         //实例化视图类
         $this->view       = Think::instance('View');
 
-        defined('__EXT__') or define('__EXT__','');
-        if(''== __EXT__ || false === stripos(C('REST_CONTENT_TYPE_LIST'),__EXT__)) {
-            // 资源类型没有指定或者非法 则用默认资源类型访问
+        if(!defined('__EXT__')) define('__EXT__','');
+
+        // 资源类型检测
+        if(''==__EXT__) { // 自动检测资源类型
+            $this->_type   =  $this->getAcceptType();
+        }elseif(false === stripos(C('REST_CONTENT_TYPE_LIST'),__EXT__)) {
+            // 资源类型非法 则用默认资源类型访问
             $this->_type   =  C('REST_DEFAULT_TYPE');
         }else{
-            $this->_type   =  __EXT__;
+            // 检测实际资源类型
+            if($this->getAcceptType() == __EXT__) {
+                $this->_type   =  __EXT__;
+            }else{
+                $this->_type   =  C('REST_DEFAULT_TYPE');
+            }
         }
 
         // 请求方式检测
@@ -73,7 +83,7 @@ abstract class Action {
     /**
      * 是否AJAX请求
      * @access protected
-     * @return bool
+     * @return boolean
      */
     protected function isAjax() {
         if(isset($_SERVER['HTTP_X_REQUESTED_WITH']) ) {
@@ -94,7 +104,7 @@ abstract class Action {
      * @return mixed
      */
     public function __call($method,$args) {
-        if( 0 === strcasecmp($method,ACTION_NAME.C('ACTION_SUFFIX'))) {
+        if( 0 === strcasecmp($method,ACTION_NAME)) {
             if(method_exists($this,$method.'_'.$this->_method.'_'.$this->_type)) { // RESTFul方法支持
                 $fun  =  $method.'_'.$this->_method.'_'.$this->_type;
                 $this->$fun();
@@ -192,6 +202,8 @@ abstract class Action {
      * @return void
      */
     protected function response($data,$type='',$code=200) {
+        // 保存日志
+        if(C('LOG_RECORD')) Log::save();
         $this->sendHttpStatus($code);
         exit($this->encodeData($data,strtolower($type)));
     }
@@ -205,7 +217,6 @@ abstract class Action {
      */
     protected function encodeData($data,$type='') {
         if(empty($data))  return '';
-        if(empty($type)) $type =  $this->_type;
         if('json' == $type) {
             // 返回JSON数据格式到客户端 包含状态信息
             $data = json_encode($data);
@@ -221,7 +232,7 @@ abstract class Action {
     }
 
     // 发送Http状态信息
-    protected function sendHttpStatus($code) {
+    protected function sendHttpStatus($status) {
         static $_status = array(
             // Informational 1xx
             100 => 'Continue',
@@ -277,15 +288,36 @@ abstract class Action {
             header('Status:'.$code.' '.$_status[$code]);
         }
     }
-
-   /**
-     * 析构方法
-     * @access public
+    /**
+     * 获取当前请求的Accept头信息
+     * @return string
      */
-    public function __destruct() {
-        // 保存日志
-        if(C('LOG_RECORD')) Log::save();
-        // 执行后续操作
-        tag('action_end');
+    protected function getAcceptType(){
+        $type = array(
+            'html'  =>  'text/html,application/xhtml+xml,*/*',
+            'xml'   =>  'application/xml,text/xml,application/x-xml',
+            'json'  =>  'application/json,text/x-json,application/jsonrequest,text/json',
+            'js'    =>  'text/javascript,application/javascript,application/x-javascript',
+            'css'   =>  'text/css',
+            'rss'   =>  'application/rss+xml',
+            'yaml'  =>  'application/x-yaml,text/yaml',
+            'atom'  =>  'application/atom+xml',
+            'pdf'   =>  'application/pdf',
+            'text'  =>  'text/plain',
+            'png'   =>  'image/png',
+            'jpg'   =>  'image/jpg,image/jpeg,image/pjpeg',
+            'gif'   =>  'image/gif',
+            'csv'   =>  'text/csv'
+        );
+        
+        foreach($type as $key=>$val){
+            $array   =  explode(',',$val);
+            foreach($array as $k=>$v){
+                if(stristr($_SERVER['HTTP_ACCEPT'], $v)) {
+                    return $key;
+                }
+            }
+        }
+        return false;
     }
 }
